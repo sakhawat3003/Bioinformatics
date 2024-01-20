@@ -1,0 +1,430 @@
+---
+title: "Bioinformatics: Sequence and Phylogenetic Analysis"
+author: 
+  - name: "Md Sakhawat Hossen"
+    email: "sakhawat3003@gmail.com"
+date: "05/30/2022"
+output: 
+   html_document:
+    toc: true
+    theme: cosmo
+    highlight: monochrome
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## *Introduction*
+
+Nucleic acids and protein sequences are extremely ubiquitous to the way we imagine biology
+today. Nucleic acids represent genes, RNAs, and so on, whereas proteins are considered
+the building blocks of life. These biomolecules actually depict the information content in
+the living system. They are represented in terms of a sequence of characters. The famous
+central dogma of molecular biology can be perceived as one type of a set of characters being
+converted into another at the sequence level. For example, messenger RNAs (mRNAs) are
+converted into proteins or, rather, polypeptides via translation. Thus, it is the sequence of DNA
+that will eventually determine the protein sequence. This makes sequence analysis important
+for various applications ranging from the comparison of biomolecules for studying evolution,
+mutation to identification of interesting sites in biomolecules, and so on.
+
+It was the huge growth in sequence data that paved the way for the evolution of the
+bioinformatics domain. Data is usually a stream of characters. The characters in the case
+of DNA are ATGC (these represent the bases in the nucleotides—remember that RNA has U
+instead of T), whereas in the case of proteins, they consist of the letters that represent amino
+acids. Computer scientists sometimes call these sequences the bitcode of life. Analyzing the
+properties of these molecules as well as understanding the underlying mechanism of the
+transformation of one type of information into another or the next level is one of the keys
+to deciphering the living system.
+
+## *Retrieving a sequence*
+
+Sequence analysis is the most basic task in bioinformatics. In general, it refers to processing
+sequence data of DNA or proteins to harness the underlying information about the function,
+structure, or evolution of the biomolecule. Analyzing sequences allows us to find similarities
+or dissimilarities between them for comparison purposes. One can use the sequence data
+to identify the chemical properties of the sequence based on its content. Furthermore, we
+can also use them to compute their structure. In addition, they are also applied to create a
+homology-based model to predict unknown three-dimensional structures of proteins that can
+be used in drug discovery. 
+
+To start the task of sequence analysis, the first thing we need is a sequence of DNA or protein.
+Such sequence data can be retrieved either by visiting the database hosting page via a
+browser or by accessing the data mart form within R via corresponding commands/functions. 
+
+We will illustrate here how the query language from the **seqinr** and **ape** package can be
+used for various types of searches. There is flexibility in choosing from so many different gene banks. 
+
+```{r warning=FALSE, message=FALSE}
+library(seqinr)
+library(Biostrings)
+library(ape)
+```
+
+We will work with the **genbank** database to retrieve our sequences. First we will get the sequences of the genes with the accession numbers *AF517525*, *AH002632*, *BC011616*, *CR542246*. All of them are **ccnd3** genes. CCND3(Cyclin D3) is a Protein Coding gene. Diseases
+associated with CCND3 include Bladder Carcinoma In Situ and Retinoblastoma.   
+
+```{r}
+accessions<-c("AF517525", "AH002632", "BC011616", "CR542246")
+ccnd3hs<-read.GenBank(accessions, seq.names = accessions, species.names = TRUE, as.character= T)
+```
+
+Let's get the length of the each sequence. 
+
+```{r}
+getLength(ccnd3hs)
+```
+
+Now, we will get the sequence of the first gene with the accession **AF517525** in our list. 
+
+```{r}
+getSequence(ccnd3hs$AF517525)[1:20] #return only the first 20 nucleotide sequences
+```
+
+We will get the translation to amino acids for the nucleotide sequences of the first gene. 
+
+```{r}
+getTrans(ccnd3hs$AF517525)[1:20] #return only the first 20 amino acid sequences
+```
+
+## *Computations on sequences*
+
+We will calculate the nucleotide and dinucleotide frequencies for the **AF517525.CCND3** gene, first in our list. 
+
+```{r}
+table(getSequence(ccnd3hs$AF517525))
+```
+
+Using the *count* function from the *seqinr* library we can count the number of dinucleotides. 
+
+```{r}
+count(getSequence(ccnd3hs$AF517525), 2)
+```
+
+### *GC Content*
+
+We are often interested in the fraction of GC(G+C) content in the sequence. We can obtain this with the *GC* function. We can also calculate the GC content in the first positions of the codon bases or the second or the third position in the codon bases by the GC1, GC2, and GC3 functions respectively. A codon is a DNA or RNA sequence of three nucleotides (a trinucleotide) that forms a unit of genomic information encoding a particular amino acid or signaling the termination of protein synthesis (stop signals). There are 64 different codons: 61 specify amino acids and 3 are used as stop signals.  
+
+```{r}
+GC(getSequence(ccnd3hs$AH002632)) 
+```
+
+```{r}
+GC1(getSequence(ccnd3hs$AH002632)) #GC in the first positions of the codons
+```
+
+```{r}
+GC2(getSequence(ccnd3hs$AH002632)) #GC in the second positions of the codons
+```
+
+```{r}
+GC3(getSequence(ccnd3hs$AH002632)) #GC in the third positions of the codons
+```
+
+From this analysis, we can clearly say that the G+C content is higher in the first positions of the codons for our first sequence.  
+
+Now, we will calculate the percentages of G+C content for a window of 60 nucleotides progressively.
+
+```{r}
+GC.percent<-double() #created an empty vector
+n<-length(getSequence(ccnd3hs$AH002632))
+for(i in 1:(n-60)){
+  GC.percent[i]<-GC(getSequence(ccnd3hs$AH002632)[i:(i+60)])
+}
+plot(GC.percent, type = "l")
+```
+
+From the plot, it is conceivable that the G+C content changes sharply over the window of 60 nucleotides. 
+
+### Rho statistics of dinucleotides
+
+We can measure the rho scores for each dinucleotide in the sequence of *AF517525.CCND3* to get the idea of over representation or under representation. The expected rho score is 1. If the rho score of any dinucleotide shoots over 1 then it is over represented and if rho score is below 1 then it is under represented. Rho score is measured by the formula:   
+
+$$\rho(xy)= \frac{f_{xy}}{f_x.f_y}$$
+
+Where $f_{xy}$ represents the frequency of the dinucleotide $xy$ and $f_x$, $f_y$ represent the frequency of x and y nucleotides respectively.  
+
+```{r}
+round(rho(getSequence(ccnd3hs$AF517525)),2)
+```
+
+Here we can see the dinucleotide *ct* is over represented and the dinucleotide *cg* is under
+represented. 
+
+### *Comparison of the Frequency of Amino Acid*
+
+Here we will compare the frequency of amino acids after the translation of the two sequences 
+*AF517525.CCND3* and *AH002632.CCND3*. We will translate the two sequences and order them, and, next produce a dot chart with amino acid frequencies.
+
+```{r}
+tab<-table(getTrans(ccnd3hs$AF517525))
+table.ordered<-tab[order(tab)]
+names(table.ordered)<-aaa(names(table.ordered))
+```
+
+```{r warning=FALSE}
+dotchart(table.ordered, pch = 19, xlab = "Amino Acid Frequency for AF517525.CCND3")
+```
+
+```{r warning=FALSE}
+tab<-table(getTrans(ccnd3hs$AH002632))
+table.ordered<-tab[order(tab)]
+names(table.ordered)<-aaa(names(table.ordered))
+```
+
+```{r warning=FALSE}
+dotchart(table.ordered, pch = 19, xlab = "Amino Acid Frequency for AH002632.CCND3")
+```
+
+The sequences for these two genes does not look similar with respect to the frequency and order of the amino acids.   
+
+## *Pattern Matching*
+
+while analyzing genes or proteins sequences, we often need to compare them to know their similarities and differences. This serves the purposes from various perspectives, such as for evolutionary studies and to understand the structure and function of a novel sequence by comparing it to the known one. To know whether the two gene/protein sequences we are studying are similar or different at the quantitative level, we measure their similarities.
+
+A manner to investigate a long sequence is to search for identical patterns, eventually allowing for a specified number of mismatches. There are many relevant examples such as seeking for one of the stop codons UAG, UGA UAA in RNA, or recognition sequences of enzymes. 
+
+So first, we will find the pattern *cccggg* in the sequence of *AF517525.CCND3* gene with zero mismatch and also with one mismatch. The functions *c2s* converts a sequence of characters in to a single string. 
+
+```{r}
+ccnd3hs.1<-c2s(getSequence(ccnd3hs$AH002632))
+ccnd3hs.1
+```
+
+```{r}
+pattern<-"cccggg"
+countPattern(pattern = pattern, subject = ccnd3hs.1, min.mismatch = 0)
+```
+
+```{r}
+matchPattern(pattern = pattern, subject = ccnd3hs.1, min.mismatch = 0)
+```
+
+Now, we will try to match with only one mismatch. 
+
+```{r}
+matchPattern(pattern = pattern, subject = ccnd3hs.1, max.mismatch = 1)
+```
+
+## *Pairwise sequence alignment*
+
+Before making comparative statements about two sequences, we have to produce a pairwise
+sequence alignment. Pairwise alignment refers to the optimal way of arranging two sequences
+in order to identify regions of similarity therein. In other words, we need to find the optimal
+alignment between the two sequences. 
+
+There are several algorithms and metrics that are designed to perform such alignments,
+and opting for one of them depends on the biological question that needs to be answered.
+There are global alignment methods that aim to align every residue in the sequences and are
+used when sequences are similar and of comparable length (they need not be equal). An example of such a method is the Needleman-Wunsch algorithm. We also have a local alignment technique that attempts to align regions of high similarity in the sequences, and the Smith-Waterman algorithm is an example of such a technique.
+
+In the following example, we have shown manually typed-in sequences for convenience, but the same method can be used for other types of sequences as well. 
+
+```{r}
+sequence1 <- "GAATTCGGCTA"
+sequence2 <- "GATTACCTA"
+```
+
+Now, we will create a scoring matrix for the nucleotides to assign penalties for the mismatch and the gaps. 
+
+```{r}
+myScoringMatrix<-nucleotideSubstitutionMatrix(match = 1, mismatch = -1, baseOnly = TRUE)
+myScoringMatrix
+```
+
+Now, we will assign gap penalties for the alignments.
+
+```{r}
+gapOpen <- 2
+gapExtend <- 1
+```
+
+We will use the function *pairwiseAlignment* to perform a global alignment for the sequences.
+
+```{r}
+myAlignment<-pairwiseAlignment(sequence1, sequence2, substitutionMatrix=myScoringMatrix,
+                               gapOpening=gapOpen, gapExtension=gapExtend, 
+                               type="global", scoreOnly=FALSE)
+myAlignment
+```
+
+In the case of protein sequences, we have scoring matrices that are called *substitution matrices*. We can check the available scoring matrices for amino acid sequences from the 
+*Biostrings* library. 
+
+Optimal alignment for pairs of amino acid sequences are often considered to be more relevant because these are more closely related to biological functions.
+
+We will use the *pairwiseAlignment* function from the *Biostrings* package to find the optimal Needleman-Wunsch aligment score for the sequences "PAWHEAE" and "HEAGAWGHEE". We will use the substitution matrices *BLOSUM62* to align the protein sequences. 
+
+```{r}
+data("BLOSUM62")
+subMatrix<-"BLOSUM62"
+sequence1 <- "PAWHEAE"
+sequence2 <- "HEAGAWGHE"
+```
+
+```{r}
+myAlignment<-pairwiseAlignment(sequence1, sequence2, substitutionMatrix=subMatrix,
+                               gapOpening=gapOpen, gapExtension=gapExtend,
+                               type="global", scoreOnly=FALSE)
+myAlignment
+```
+
+Now we will run a local alignment to find the optimal Smith-Waterman alignment score with our peptide (protein) sequences. 
+
+```{r}
+myAlignment<-pairwiseAlignment(sequence1, sequence2, substitutionMatrix=subMatrix,
+                               gapOpening=gapOpen, gapExtension=gapExtend,
+                               type="local", scoreOnly=FALSE)
+myAlignment
+```
+
+We can see that the local alignment simply returns the highly similar regions in both the
+sequences using the Smith-Waterman algorithm. 
+
+Following the Needleman-Wunsch algorithm we have got an alignment score of 14. But we would like to question whether this score large or not. One way to answer this question is by comparing it with the alignment score of random sequences for 7 amino acids to 10 amino acids. And finally we compute the probability of the alignment scores larger than 1.
+
+We sample randomly from the names of the amino acids from the *BLOSUM62*, seven for y and 10 for x and compute the maximum alignment score. We will repeat the task for 1000 times and find the proportion of the scores greater than 1. 
+
+```{r}
+scores<-double()
+for(i in 1:1000){
+sequence1<-c2s(sample(rownames(BLOSUM62), 7, replace = TRUE))
+sequence2<-c2s(sample(rownames(BLOSUM62), 10, replace = TRUE))
+scores[i]<-pairwiseAlignment(sequence1, sequence2, substitutionMatrix=subMatrix,
+                               gapOpening=gapOpen, gapExtension=gapExtend,
+                               type="global", scoreOnly=TRUE) #scoreOnly is TRUE to return score 
+}
+sum(scores>14)/1000
+```
+
+The probability of scores larger than 14 is only 0.001 which is highly significant. So we can conclude that the alignment is stronger than expected from randomly constructed sequences.
+
+## *Multiple Sequence Alignment and Phylogenetic Analysis*
+
+Multiple sequence alignment is one of the most fundamental tasks in bioinformatics. There are many well known and widely used algorithms like ClustalW, ClustalOmega, and MUSCLE for multiple sequence alignment but all these algorithms are implemented as stand-alone commmand line programs without any integration into the R/Bioconductor ecosystem. 
+
+But **msa**(multiple sequence alignment) library aims to close that gap by providing a unified R interface to the multiple sequence alignment algorithms like ClustalW, ClustalOmega, and MUSCLE. The **msa** package was developed by Enrico Bonatesta, Christoph Kainrath, and Ulrich Bodenhofer from Institute of Bioinformatics, Johannes Kepler University.     
+
+For multiple sequence alignment we have downloaded the protein sequences for Uniprot accessions P06747, P0C569, O56773 and Q5VKP1. The accessions stand for rabies virus phosphoprotein, Mokola virus phosphoprotein, Lagos bat virus phosphoprotein and Western Caucasian bat virus phosphoprotein, respectively. We have also created a fasta file combing all the sequences. We will first load the fasta file and take a look at it. 
+
+```{r warning=FALSE, message=FALSE}
+library(msa)
+library(seqinr)
+library(ape)
+library(Biostrings)
+```
+
+```{r}
+phospho.seq<-readAAStringSet(filepath = "phosphoproteins.fasta") #loading the fasta file
+```
+
+```{r}
+phospho.seq #taking a look at all the protein sequences 
+```
+
+For the multiple sequence alignment, we will now use the function *msa()* from **msa** package. The *msa* function uses the *ClustalW* algorithm by default if no other argument is passed. Alternatively, we can also use two other algorithms ClustalOmega or MUSCLE. 
+
+```{r}
+phospho.aln<-msa(phospho.seq, method = "ClustalW")
+phospho.aln
+```
+
+Obviously, the default printing function shortens the alignment for the sake of compact output. 
+
+### *Phylogenetic Tree for Virus Protein sequences*
+
+
+We have got our multiple sequence alignment for rabies virus phosphoprotein, Mokola virus phosphoprotein, Lagos bat virus phosphoprotein and Western Caucasian bat virus phosphoprotein. Now, we will create a phylogenetic tree for these proteins.   
+
+```{r}
+phospho.seqinr<-msaConvert(phospho.aln, type = "seqinr::alignment") #converting to the format usable
+#with the seqinr package
+distances<-dist.alignment(phospho.seqinr, "identity") #creating the distance matrix for all the
+#distances between each of the proteins
+distances
+```
+
+```{r}
+phospho.tree<-nj(distances) #creating a phylogenetic tree with neighbor joining algorithm
+plot(phospho.tree, main="Phylogenetic Tree of Phosphoprotein Sequences")
+```
+
+The lengths of the branches in the plot of the tree are proportional to the amount of evolutionary change (estimated number of mutations) along the branches.
+
+In this case, the branches leading to Lagos bat virus phosphoprotein (O56773) and Mokola virus phosphoprotein (P0C569) from the node representing their common ancestor are slightly shorter than the branches leading to the Western Caucasian bat virus (Q5VKP1) and rabies virus (P06747) phosphoproteins from the node representing their common ancestor.
+
+This suggests that there might have been more mutations in the Western Caucasian bat virus (Q5VKP1) and rabies virus (P06747) phosphoproteins since they shared a common ancestor, than in the Lagos bat virus phosphoprotein (O56773) and Mokola virus phosphoprotein (P0C569) since they shared a common ancestor.
+
+### *Phylogenetic tree for DNA or mRNA sequences*
+
+We have previously created phylogenetic tree for protein sequences. If we choose the genomes of two vertebrates to align them we might find it hard to align them correctly since they could have accumulated huge number of changes or mutations through the evolutionary timeline.   
+
+In contrast, changes on the level of proteins are much slower and much easier to align even the organisms are distantly related. This is why for reasonably distantly related organisms such as vertebrates, it is usually preferable to use protein sequences for phylogenetic analyses.   
+
+On the other hand, if we are studying closely related organisms such as primates then we can assume that their genomes has gone through little changes or mutations. In that case, if we use protein sequences for phylogenetic analysis then we might find very little changes in the protein sequences to give us any fruitful conclusion. Therefore, it is often preferable to use DNA sequences for a phylogenetic analysis of closely related organisms. 
+
+We have retrieved the mRNA sequences for Mokola virus phosphoprotein, Lagos bat virus phosphoprotein,
+Lagos bat virus phosphoprotein, Duvenhage virus phosphoprotein with the NCBI accessions AF049118,  
+AF049114, AF049119, and AF049115 respectively.  
+
+```{r}
+mRNA.seq<-readAAStringSet(filepath = "mRNA.fasta")
+mRNA.seq
+```
+
+We will do the multiple sequence alignment of the mRNA sequences. 
+
+```{r}
+mRNA.aln<-msa(mRNA.seq)
+mRNA.aln
+```
+
+Following the previous procedure, we will create a phylogenetic tree for the mRNA sequences. 
+
+```{r}
+mRNA.aln.seqinr<-msaConvert(mRNA.aln, type = "seqinr::alignment")
+mRNA.dist<-dist.alignment(mRNA.aln.seqinr, "identity")
+mRNA.dist
+```
+
+```{r}
+mRNA.tree<-nj(mRNA.dist)
+plot(mRNA.tree, main="Phylogenetic Tree of mRNA Sequences")
+```
+
+### *Phylogenetic Tree for Hemoglobin alpha Protein Sequences*
+
+Now, we will perform a multiple alignment of Hemoglobin alpha protein sequences. 
+
+```{r}
+hemo.Seq <- readAAStringSet(system.file("examples/HemoglobinAA.fasta", package="msa")) #reading the 
+#fasta file of the sequences
+hemo.Aln <- msa(hemo.Seq)
+hemo.Aln
+```
+
+Now, we will convert the result for later processing with the seqinr package.
+
+```{r}
+hemo.seqinr <- msaConvert(hemo.Aln, type="seqinr::alignment")
+```
+
+We will compute a distance matrix using the *dist.alignment()* function from the seqinr
+package.
+
+```{r}
+distances<-dist.alignment(hemo.seqinr, "identity")
+as.matrix(distances)[2:5, "HBA1_Homo_sapiens", drop=FALSE]
+```
+
+Now we can construct a phylogenetic tree with the neighbor joining algorithm using the *nj()*
+function from the ape package.
+
+```{r}
+hemo.tree<-nj(distances)
+plot(hemo.tree, main="Phylogenetic Tree of Hemoglobin Alpha Sequences")
+```
+
+This marks the end of this introductory project on sequence and phylogenetic analysis. It is a 
+good practice to close the bank now. 
+
